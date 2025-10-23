@@ -1,3 +1,4 @@
+from io import StringIO
 import os
 import datetime
 from fastapi import Request
@@ -28,9 +29,10 @@ def get_calendar_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file("creds.json", SCOPES)
-            creds = flow.run_local_server(open_browser=True, port=8080)
-        # Save token for next time
+            creds_json_str = os.environ["GOOGLE_CREDS_JSON"]
+            creds_file = StringIO(creds_json_str)
+            flow = InstalledAppFlow.from_client_secrets_file(creds_file, SCOPES)
+            creds = flow.run_local_server(open_browser=False)
         with open(token_path, "w") as token:
             token.write(creds.to_json())
 

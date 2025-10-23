@@ -12,3 +12,4 @@ wheels/
 #others
 creds.json
 token.json
+.env
