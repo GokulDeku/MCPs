@@ -1,48 +1,36 @@
-from io import StringIO
 import os
-import datetime
-from fastapi import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+import json
+import logging
+from fastapi import FastAPI
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from mcp.server.fastmcp import FastMCP
-import logging
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Initialize MCP server
+app = FastAPI()
 mcp = FastMCP("google-calendar")
 
-# Google Calendar API scope
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
+SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_CREDS_JSON")
+if not SERVICE_ACCOUNT_JSON:
+    raise RuntimeError("Environment variable GOOGLE_CREDS_JSON is not set")
+
+SERVICE_ACCOUNT_INFO = json.loads(SERVICE_ACCOUNT_JSON)
+
 def get_calendar_service():
-    creds = None
-    token_path = "token.json"
-
-    # Try loading existing credentials
-    if os.path.exists(token_path):
-        creds = Credentials.from_authorized_user_file(token_path, SCOPES)
-
-    # If no valid credentials, log in via OAuth
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            creds_json_str = os.environ["GOOGLE_CREDS_JSON"]
-            creds_file = StringIO(creds_json_str)
-            flow = InstalledAppFlow.from_client_secrets_file(creds_file, SCOPES)
-            creds = flow.run_local_server(open_browser=False)
-        with open(token_path, "w") as token:
-            token.write(creds.to_json())
-
-    return build("calendar", "v3", credentials=creds)
-
+    creds = Credentials.from_service_account_info(
+        info=SERVICE_ACCOUNT_INFO,
+        scopes=SCOPES
+    )
+    service = build("calendar", "v3", credentials=creds)
+    return service
 
 @mcp.tool("create_calendar_event")
 def create_calendar_event(summary: str, start_time: str, end_time: str):
     """
-    Create a Google Calendar event.
+    Create a Google Calendar event using service account.
     """
     service = get_calendar_service()
     event = {
@@ -53,6 +41,11 @@ def create_calendar_event(summary: str, start_time: str, end_time: str):
     created = service.events().insert(calendarId="primary", body=event).execute()
     return {"status": "success", "event_id": created["id"]}
 
+@app.get("/")
+def root():
+    return {"status": "running"}
 
 if __name__ == "__main__":
-    mcp.run()
+    import uvicorn
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
