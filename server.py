@@ -9,7 +9,7 @@ from mcp.server.fastmcp import FastMCP
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
-app = FastAPI()
+app = FastAPI(redirect_slashes=False)
 mcp = FastMCP("google-calendar")
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
