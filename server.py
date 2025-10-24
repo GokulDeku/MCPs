@@ -2,15 +2,44 @@ import os
 import json
 import logging
 from fastapi import FastAPI
+import fastapi
 from fastapi.responses import PlainTextResponse
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from mcp.server.fastmcp import FastMCP
+import mcp as mcp_pkg
+import fastmcp as fastmcp_pkg
+import starlette
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
 app = FastAPI()
 mcp = FastMCP("google-calendar")
+
+app.mount("/mcp/", mcp.streamable_http_app())
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
+@app.get("/debug/routes", response_class=PlainTextResponse)
+def debug_routes():
+    lines = []
+    lines.append(f"fastapi={fastapi.__version__} starlette={starlette.__version__}")
+    try:
+        lines.append(f"mcp={mcp_pkg.__version__} fastmcp={fastmcp_pkg.__version__}")
+    except Exception:
+        pass
+    lines.append("ROOT APP ROUTES:")
+    for r in app.router.routes:
+        lines.append(f"  {getattr(r, 'path', '?')}  -> {type(r).__name__}")
+    # Peek into the mounted MCP sub-app
+    mcp_app = app.routes[-2].app  # the Mount you just added (heuristic but works here)
+    if hasattr(mcp_app, "routes"):
+        lines.append("MCP SUB-APP ROUTES:")
+        for r in mcp_app.routes:
+            lines.append(f"  {getattr(r, 'path', '?')}  -> {type(r).__name__}")
+    return "\n".join(lines)
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
@@ -41,12 +70,6 @@ def create_calendar_event(summary: str, start_time: str, end_time: str):
     }
     created = service.events().insert(calendarId="primary", body=event).execute()
     return {"status": "success", "event_id": created["id"]}
-
-app.mount("/mcp/", mcp.streamable_http_app())
-
-@app.get("/health")
-def health():
-    return {"ok": True}
 
 @app.get("/")
 def root():
