@@ -1,38 +1,48 @@
-import os
-import json
-import logging
+import os, json, logging
 from fastapi import FastAPI
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
+from starlette.responses import PlainTextResponse
 from mcp.server.fastmcp import FastMCP
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
+# Show tracebacks in JSON-RPC responses while debugging (turn off later)
+mcp = FastMCP(
+    "google-calendar",
+    mask_error_details=False,   # show full error payloads in JSON-RPC error
+    log_level="DEBUG"
+)
+
 app = FastAPI()
-mcp = FastMCP("google-calendar")
+# Mount the MCP transport under /mcp (supports GET stream + POST JSON-RPC on same path)
+app.mount("/mcp", mcp.streamable_http_app())
 
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
+# Simple health probe
+@mcp.custom_route("/health", methods=["GET"])
+async def health(_):
+    return PlainTextResponse("OK")
 
-SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_CREDS_JSON")
-if not SERVICE_ACCOUNT_JSON:
-    raise RuntimeError("Environment variable GOOGLE_CREDS_JSON is not set")
-
-SERVICE_ACCOUNT_INFO = json.loads(SERVICE_ACCOUNT_JSON)
-
-def get_calendar_service():
-    creds = Credentials.from_service_account_info(
-        info=SERVICE_ACCOUNT_INFO,
-        scopes=SCOPES
-    )
-    service = build("calendar", "v3", credentials=creds)
-    return service
-
+# ---- Tool ----
 @mcp.tool("create_calendar_event")
 def create_calendar_event(summary: str, start_time: str, end_time: str):
     """
-    Create a Google Calendar event using service account.
+    Create a Google Calendar event using a service account.
+    Tip: 'primary' here is the service account's calendar. Share your calendar with the SA
+    and use that calendar ID if you want to see events in your account.
     """
-    service = get_calendar_service()
+    # Do lazy imports so listing tools doesn't import Google libs (avoids 500 on /mcp)
+    from google.oauth2.service_account import Credentials
+    from googleapiclient.discovery import build
+
+    SCOPES = ["https://www.googleapis.com/auth/calendar"]
+
+    svc_json = os.environ.get("GOOGLE_CREDS_JSON")
+    if not svc_json:
+        raise RuntimeError("GOOGLE_CREDS_JSON is not set on the server")
+
+    svc_info = json.loads(svc_json)
+    creds = Credentials.from_service_account_info(info=svc_info, scopes=SCOPES)
+    service = build("calendar", "v3", credentials=creds)
+
     event = {
         "summary": summary,
         "start": {"dateTime": start_time, "timeZone": "America/Los_Angeles"},
@@ -41,11 +51,10 @@ def create_calendar_event(summary: str, start_time: str, end_time: str):
     created = service.events().insert(calendarId="primary", body=event).execute()
     return {"status": "success", "event_id": created["id"]}
 
-app.mount("/", mcp.streamable_http_app())
-
+# Optional: keep a normal root
 @app.get("/")
 def root():
-    return {"status": "running"}
+    return {"status": "running", "mcp": "/mcp", "health": "/mcp/health"}
 
 if __name__ == "__main__":
     import uvicorn
