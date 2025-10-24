@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.119.1",
+    "fastmcp>=2.12.4",
     "google-api-python-client>=2.185.0",
     "google-auth>=2.41.1",
     "google-auth-httplib2>=0.2.0",
