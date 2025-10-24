@@ -41,7 +41,7 @@ def create_calendar_event(summary: str, start_time: str, end_time: str):
     created = service.events().insert(calendarId="primary", body=event).execute()
     return {"status": "success", "event_id": created["id"]}
 
-app.mount("/mcp", mcp.streamable_http_app())
+app.mount("/", mcp.streamable_http_app())
 
 @app.get("/")
 def root():
