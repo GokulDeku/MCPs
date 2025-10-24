@@ -44,9 +44,9 @@ def create_calendar_event(summary: str, start_time: str, end_time: str):
 
 app.mount("/mcp", mcp.streamable_http_app())
 
-@mcp.custom_route("/health", methods=["GET"])
-async def health(_):
-    return PlainTextResponse("OK")
+@app.get("/health")
+def health():
+    return {"ok": True}
 
 @app.get("/")
 def root():
