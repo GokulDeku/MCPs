@@ -1,0 +1,10 @@
+fastapi>=0.119.1
+fastmcp>=2.12.4
+google-api-python-client>=2.185.0
+google-auth>=2.41.1
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.2
+mcp>=1.18.0
+uvicorn>=0.38.0
+python-dotenv>=1.0.0
+requests>=2.31.0
