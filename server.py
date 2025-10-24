@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from mcp.server.fastmcp import FastMCP
@@ -41,7 +42,11 @@ def create_calendar_event(summary: str, start_time: str, end_time: str):
     created = service.events().insert(calendarId="primary", body=event).execute()
     return {"status": "success", "event_id": created["id"]}
 
-app.mount("/", mcp.streamable_http_app())
+app.mount("/mcp", mcp.streamable_http_app())
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health(_):
+    return PlainTextResponse("OK")
 
 @app.get("/")
 def root():
