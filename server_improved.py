@@ -1,3 +1,4 @@
+import requests
 import os
 import json
 import logging
@@ -14,6 +15,27 @@ log_level = os.environ.get("LOG_LEVEL", "INFO")
 logging.basicConfig(level=getattr(logging, log_level), format="%(asctime)s - %(levelname)s - %(message)s")
 
 load_dotenv()
+
+HF_API_URL = "https://router.huggingface.co/v1/chat/completions"
+HF_API_KEY = os.environ.get("HUGGINGFACE_API_KEY")
+
+def query_huggingface(prompt: str):
+    """Send a prompt to the Hugging Face model and return generated text."""
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+    }
+    payload = {
+        "model": "google/gemma-2-2b-it:nebius",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 300,
+    }
+    response = requests.post(HF_API_URL, headers=headers, json=payload)
+    response.raise_for_status()
+    data = response.json()
+
+    return data["choices"][0]["message"]["content"]
 
 # Get port from environment (Render sets this automatically)
 port = int(os.environ.get("PORT", 8000))
@@ -47,17 +69,9 @@ def get_calendar_service():
         logging.error(f"Failed to initialize Google Calendar service: {e}")
         raise
 
-@mcp.tool("create_calendar_event")
-def create_calendar_event(summary: str, start_time: str, end_time: str, timezone: str = "America/Los_Angeles"):
-    """
-    Create a Google Calendar event using OAuth2 credentials.
-    
-    Args:
-        summary: Event title
-        start_time: Start time in ISO format (e.g., "2024-01-15T14:00:00")
-        end_time: End time in ISO format (e.g., "2024-01-15T15:00:00")
-        timezone: Timezone (default: America/Los_Angeles)
-    """
+# Define the core logic as a regular function
+def _create_calendar_event_logic(summary: str, start_time: str, end_time: str, timezone: str = "America/Los_Angeles"):
+    """Create a Google Calendar event using OAuth2 credentials."""
     try:
         service = get_calendar_service()
         event = {
@@ -70,6 +84,20 @@ def create_calendar_event(summary: str, start_time: str, end_time: str, timezone
     except Exception as e:
         logging.error(f"Failed to create calendar event: {e}")
         return {"status": "error", "message": str(e)}
+
+# Wrap it as a tool
+@mcp.tool("create_calendar_event")
+def create_calendar_event(summary: str, start_time: str, end_time: str, timezone: str = "America/Los_Angeles"):
+    """
+    Create a Google Calendar event using OAuth2 credentials.
+    
+    Args:
+        summary: Event title
+        start_time: Start time in ISO format (e.g., "2024-01-15T14:00:00")
+        end_time: End time in ISO format (e.g., "2024-01-15T15:00:00")
+        timezone: Timezone (default: America/Los_Angeles)
+    """
+    return _create_calendar_event_logic(summary, start_time, end_time, timezone)
 
 @mcp.tool("list_calendar_events")
 def list_calendar_events(max_results: int = 10, time_min: str = None):
@@ -125,6 +153,38 @@ def delete_calendar_event(event_id: str):
         return {"status": "success", "message": f"Event {event_id} deleted successfully"}
     except Exception as e:
         logging.error(f"Failed to delete calendar event: {e}")
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool("ai_schedule_event")
+def ai_schedule_event(prompt: str):
+    try:
+        llm_prompt = f"""
+        You are an assistant that extracts event information from text.
+        Respond ONLY in JSON with keys: summary, start_time, end_time (ISO 8601 format).
+        Text: {prompt}
+        """
+
+        output = query_huggingface(llm_prompt)
+        import re, json
+        match = re.search(r"\{.*\}", output, re.DOTALL)
+        if not match:
+            return {"status": "error", "message": "No valid JSON found in LLM response"}
+
+        event_data = json.loads(match.group())
+        summary = event_data["summary"]
+        start_time = event_data["start_time"]
+        end_time = event_data["end_time"]
+
+        # Call the core logic function directly (not the tool wrapper)
+        return _create_calendar_event_logic(
+            summary=summary,
+            start_time=start_time,
+            end_time=end_time
+        )
+
+    except Exception as e:
+        import logging
+        logging.error(f"AI scheduling failed: {e}")
         return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":

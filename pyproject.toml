@@ -14,3 +14,8 @@ dependencies = [
     "mcp>=1.18.0",
     "uvicorn>=0.38.0",
 ]
+
+[tool.uv.workspace]
+members = [
+    "MCP_Client",
+]

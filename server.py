@@ -58,5 +58,7 @@ def create_calendar_event(summary: str, start_time: str, end_time: str, timezone
     created = service.events().insert(calendarId="primary", body=event).execute()
     return {"status": "success", "event_id": created["id"], "event_link": created.get("htmlLink")}
 
+
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
     mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
