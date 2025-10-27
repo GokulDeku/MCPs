@@ -2,7 +2,7 @@ import requests
 import os
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from google.oauth2.credentials import Credentials

@@ -12,6 +12,7 @@ dependencies = [
     "google-auth-httplib2>=0.2.0",
     "google-auth-oauthlib>=1.2.2",
     "mcp>=1.18.0",
+    "tzdata>=2025.2",
     "uvicorn>=0.38.0",
 ]
 
